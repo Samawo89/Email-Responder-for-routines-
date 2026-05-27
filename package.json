@@ -1,0 +1,26 @@
+{
+  "name": "email-responder",
+  "version": "1.0.0",
+  "description": "Automated email responder using Claude AI",
+  "type": "module",
+  "main": "email-responder.js",
+  "scripts": {
+    "start": "node email-responder.js",
+    "dev": "node email-responder.js"
+  },
+  "keywords": [
+    "email",
+    "automation",
+    "claude",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "googleapis": "^139.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
