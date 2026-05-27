@@ -1,244 +1,88 @@
-# Email Responder Setup Guide
+# Email Responder Routine
 
-This email responder **pulls directly from your email-responder skill** and generates draft responses in your exact voice using Claude AI. It runs on GitHub Actions, so it works 24/7 even while you sleep.
+Drafts email replies in the **FCC / Yasmin voice**, saves them straight to your **Gmail
+Drafts** for review, and **learns over time** from how you've replied to each person before.
 
-## How It Works
+It runs on the **Gmail connector** (already authorised in Cowork — no OAuth or API keys to
+set up). You can run it manually now, or schedule it to run remotely later against this repo.
 
-Your skill defines:
-- **Your voice & tone** — British English, contractions, warm but professional
-- **Classification system** — 6 email scenarios (student questions, complaints, partnerships, enrolment, refunds, holding replies)
-- **Hard rules** — Never invent specifics, always use [PLACEHOLDERS], sign off as "Best wishes, Yasmin"
+## How it works
 
-The GitHub version:
-1. Checks Gmail every 30 minutes for unread emails
-2. Classifies each email into one of your 6 scenarios
-3. Generates a response **in your voice** using those rules
-4. Saves as a draft (marked as read) so you review before sending
-5. Logs everything for tracking
-
-**Key difference from the skill:** The skill shows drafts in chat for you to pick & iterate. The GitHub version runs automatically 24/7 and saves drafts for you to review in Gmail.
-
-## Quick Start (5 minutes)
-
-### Step 1: Create Your GitHub Repository
-
-1. Go to [github.com/new](https://github.com/new)
-2. Name it `email-responder`
-3. Choose "Public" (easier for now)
-4. Click "Create repository"
-
-### Step 2: Upload These Files
-
-Clone the repo locally and add these files:
-
-```bash
-git clone https://github.com/YOUR-USERNAME/email-responder.git
-cd email-responder
-
-# Copy all files from this package into the directory
-# You should have:
-# - email-responder.js
-# - package.json
-# - .github/workflows/email-responder.yml
-# - .gitignore
-# - README.md
-
-git add .
-git commit -m "Initial setup"
-git push -u origin main
+```
+Gmail inbox ──► scan unreplied human emails (last 7d)
+                       │
+                       ▼
+        learned-styles/<person>.md  ◄── reads your past Sent replies to that person
+                       │
+                       ▼
+        email-responder skill  ──► classify scenario + draft in FCC voice
+                       │
+                       ▼
+               Gmail Drafts  ◄── create_draft (never sends)
+                       │
+                       ▼
+        logs/run-YYYY-MM-DD.md + updated learned-styles/<person>.md
 ```
 
-### Step 3: Get Your Anthropic API Key
+The full step-by-step is in **[ROUTINE.md](ROUTINE.md)** — that's the playbook the agent
+follows on every run.
 
-1. Go to [console.anthropic.com](https://console.anthropic.com)
-2. Sign in to your Anthropic account
-3. Click "API keys" on the left
-4. Create a new API key
-5. Copy it (you'll use it in Step 4)
+## What's in this repo
 
-### Step 4: Set Up Gmail OAuth Credentials
+| Path | Purpose |
+|---|---|
+| **[ROUTINE.md](ROUTINE.md)** | The routine playbook — scan → learn → draft → save → log |
+| **[SKILL.md](SKILL.md)** | The `email-responder` skill — FCC voice + scenario classification |
+| **[references/](references/)** | Per-scenario voice & drafting rules (student, complaint, partnership, enrolment, refund, holding reply) |
+| **[learned-styles/](learned-styles/)** | Per-person style memory the routine reads & updates each run |
+| **[logs/](logs/)** | A markdown log per run of what was drafted |
+| `legacy/` *(see below)* | The earlier GitHub Actions + Node.js attempt, kept for reference |
 
-**This is the trickiest part, but I'll walk you through it:**
+## Running it manually (now)
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project (name it "Email Responder")
-3. Enable these APIs:
-   - Gmail API
-   - Google Drive API (for storage)
+In a session with the Gmail connector available, just say:
 
-4. Create OAuth credentials:
-   - Go to "Credentials" → "Create Credentials" → "OAuth 2.0 Client ID"
-   - Choose "Desktop application"
-   - Download the JSON file
+> **"Run the email responder routine."**
 
-5. Create a service account instead (easier):
-   - In Credentials, click "Create Credentials" → "Service Account"
-   - Name it "email-responder"
-   - Grant it "Editor" role
-   - Create a key (JSON format)
-   - Download the JSON file
+The agent will scan the last 7 days, draft replies into Gmail Drafts, update the
+learned-styles profiles, and report back which drafts need a placeholder filled in. You
+review and send from Gmail.
 
-6. Convert the JSON to a single line:
-   ```bash
-   # On Mac/Linux:
-   cat /path/to/downloaded-file.json | tr '\n' ' '
-   
-   # On Windows PowerShell:
-   Get-Content "C:\path\to\file.json" | ConvertFrom-Json | ConvertTo-Json -Compress
-   ```
+## Scheduling it remotely (later)
 
-### Step 5: Add GitHub Secrets
+When you're ready to have it run unattended (e.g. every weekday morning), turn it into a
+**Cowork scheduled routine**:
 
-1. Go to your GitHub repo
-2. Click "Settings" → "Secrets and variables" → "Actions"
-3. Click "New repository secret"
+> **"Schedule the email responder routine to run every weekday at 8am."**
 
-**Add these two secrets:**
+That creates a remote agent that, on each cron tick, checks out this repo, runs
+[ROUTINE.md](ROUTINE.md) against your Gmail, saves drafts, and commits the updated
+`learned-styles/` and `logs/` back — so the learning persists between runs. Because the
+schedule and learning both live here, the repo is the single source of truth.
 
-**Secret 1: ANTHROPIC_API_KEY**
-- Name: `ANTHROPIC_API_KEY`
-- Value: (paste your API key from Step 3)
+## Voice & rules (from the skill)
 
-**Secret 2: GMAIL_CREDENTIALS**
-- Name: `GMAIL_CREDENTIALS`
-- Value: (paste the single-line JSON from Step 4)
+- British English, contractions, warm but not gushing.
+- Opener `Hi [FirstName],`; sign-off `Best wishes,` then `Yasmin`.
+- Never invent specifics (dates, prices, names) — uses `[PLACEHOLDERS]` and flags them.
+- Six scenarios: student/member question, complaint, partnership, enrolment, refund,
+  holding reply. Anything else is flagged, never force-fitted.
+- **Drafts only — never sends.**
 
-### Step 6: Test It
+To change the voice, edit the relevant file in [references/](references/), or hand-edit a
+person's file in [learned-styles/](learned-styles/) to correct the routine.
 
-1. Go to your repo → "Actions" tab
-2. Click "Email Responder" workflow
-3. Click "Run workflow" → "Run workflow"
-4. Watch the logs in real-time
-5. Check your Gmail drafts folder for generated responses
+---
 
-### Step 7: Schedule It (Automatic)
+### Legacy: GitHub Actions + Node.js approach
 
-The workflow is already set to run every 30 minutes. To change the schedule, edit `.github/workflows/email-responder.yml`:
+The original `email-responder.js` + `.github/workflows/` ran on GitHub Actions using the
+Anthropic API and a Google **service account**. It has been superseded because:
 
-```yaml
-on:
-  schedule:
-    # Examples:
-    - cron: '*/15 * * * *'   # Every 15 minutes
-    - cron: '0 * * * *'      # Every hour
-    - cron: '0 2 * * *'      # Daily at 2 AM
-    - cron: '*/30 * * * *'   # Every 30 minutes
-```
+- It didn't use the skill's reference files (the FCC voice was lost).
+- It had no "learn over time" step.
+- A Google service account **cannot read a personal `@gmail.com` mailbox**, so the Gmail
+  auth could not work as written.
 
-Then push the change:
-```bash
-git add .github/workflows/email-responder.yml
-git commit -m "Update schedule"
-git push
-```
-
-## How It Works
-
-1. **GitHub Actions triggers** → Every 30 minutes
-2. **Script checks Gmail** → Looks for unread emails
-3. **Claude generates responses** → Uses AI to draft replies
-4. **Saves as drafts** → Emails are marked as read but saved as drafts
-5. **Logs activity** → Records what was processed
-
-## Customizing Responses
-
-The email responder uses your skill's voice and rules. To update how it responds, you have two options:
-
-### Option 1: Update in Chat (Easiest)
-Ask me: *"Update my email responder voice to..."* and I'll:
-1. Update your skill instructions
-2. Update the GitHub script to match
-3. Push the changes automatically
-
-### Option 2: Edit the GitHub Script Directly
-Edit the `systemPrompt` in `email-responder.js` (the section between the backticks that starts with "You are Yasmin...").
-
-Examples:
-```javascript
-// Change tone
-const systemPrompt = `You are Yasmin, but more formal...`
-
-// Add new scenarios
-6. **New scenario type** — Description here
-
-// Update hard rules
-5. Always close with: "Cheers, Yasmin" (instead of "Best wishes")
-```
-
-Then push:
-```bash
-git add email-responder.js
-git commit -m "Update response voice"
-git push
-```
-
-## Filtering Specific Emails
-
-By default, it processes all unread emails. To filter only certain emails, modify this line in `email-responder.js`:
-
-```javascript
-// Current: all unread
-const unreadEmails = await getUnreadEmails();
-
-// Only emails from specific senders:
-const unreadEmails = await getUnreadEmails('is:unread from:boss@company.com');
-
-// Only emails with certain words:
-const unreadEmails = await getUnreadEmails('is:unread subject:project');
-
-// Only from a specific label:
-const unreadEmails = await getUnreadEmails('is:unread label:client-requests');
-```
-
-## Monitoring & Logs
-
-Each run creates a `processing.log.json` file with:
-- Timestamp
-- Email from/subject
-- Status (drafted/failed)
-- Response preview
-
-You can download logs from the Actions tab → Select a run → Artifacts.
-
-## Troubleshooting
-
-**Workflow runs but no drafts created:**
-- Check the logs in the Actions tab
-- Make sure GMAIL_CREDENTIALS is set correctly
-- Verify the service account has Gmail access
-
-**"Gmail authentication failed" error:**
-- Recreate the service account JSON key
-- Make sure it's converted to a single line
-- Check there are no special characters in the secret
-
-**No emails being processed:**
-- Check if you have unread emails in Gmail
-- GitHub Actions may have rate limits (2,000 min/month free)
-- Try running manually first to debug
-
-## Security Notes
-
-- API keys are stored as encrypted secrets
-- Service account credentials are encrypted in transit
-- Processing logs are stored as artifacts (not in repo)
-- All files are open source on GitHub
-
-## Next Steps
-
-1. ✅ Push code to GitHub
-2. ✅ Add secrets
-3. ✅ Test manually
-4. ✅ Let it run automatically
-5. ✅ Review drafts in Gmail before sending
-6. ✅ Optional: Modify tone/filters as needed
-
-## Support
-
-If you get stuck:
-- Check the GitHub Actions logs (most helpful)
-- Verify both secrets are set correctly
-- Make sure Gmail API is enabled
-- Test locally with: `ANTHROPIC_API_KEY=... GMAIL_CREDENTIALS='...' npm start`
-
-Good luck! 🚀
+Those files are kept (unmodified) for reference but are **not** the active path. The
+connector-based routine above replaces them.

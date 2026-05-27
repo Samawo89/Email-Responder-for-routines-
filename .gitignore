@@ -9,9 +9,10 @@ yarn.lock
 .env.*.local
 
 # Logs
+# NOTE: the routine's run logs (logs/*.md) and learned-styles/ ARE committed on purpose,
+# so the "learn over time" memory persists across runs (incl. remote scheduled runs).
 *.log
-processing.log.json
-logs/
+legacy/processing.log.json
 
 # OS files
 .DS_Store
